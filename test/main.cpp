@@ -2,10 +2,38 @@
 #include <fstream>
 #include <string>
 #include <sstream>
+#include <ctime>
+#include <chrono>
+#include <random>
+#include <climits>
+
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 
-std::string loadSource(const std::string& filepath) {
+#define Call(x) \
+    clearErrors();\
+    x;\
+    logCall(#x, __FILE__, __LINE__);\
+
+std::mt19937 rnd(time(NULL));
+
+float rnd_float() {
+    return ((float)rnd() / (float)RAND_MAX - 1.0f) * 1.0f;
+}
+
+static void clearErrors() {
+    while (glGetError() != GL_NO_ERROR);
+}
+
+static bool logCall(const char* function, const char* file, int line) {
+    while (GLenum error = glGetError()) {
+        std::cout << "[OpenGL Error] (" << error << "):\n\tline: " << line << "\n\tfunction: " << function << "\n\tfile: " << file << std::endl;
+        return false;
+    }
+    return true;
+}
+
+static std::string loadSource(const std::string& filepath) {
     std::ifstream cin(filepath);
     std::string source;
     std::string line;
@@ -75,6 +103,7 @@ int main() {
 
     /* Make the window's context current */
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
     if (glewInit() != GLEW_OK) {
         std::cout << "GLEW error!" << std::endl;
         glfwTerminate();
@@ -90,46 +119,51 @@ int main() {
     unsigned int shaderProgram = createShader(loadSource("res/shaders/basic_vertex.shader"), loadSource("res/shaders/basic_fragment.shader"));
     glUseProgram(shaderProgram);
 
+    int u_Color_id = glGetUniformLocation(shaderProgram, "u_Color");
+    glUniform4f(u_Color_id, 1.0f, 1.0f, 1.0f, 1.0f);
 
 
-    float vertices[] = {
-        -0.5f, -0.5f,
-         0.5f, -0.5f,
-         0.5f,  0.5f,
-        -0.5f,  0.5f
-    };
 
-    unsigned int indices[] = {
-        0, 1, 2,
-        2, 3, 0
-    };
+    int n; std::cin >> n;
+    n *= 6;
+    float* vertices = (float*)malloc(sizeof(float) * n);
+    for (int i = 0; i < n; ++i) {
+        vertices[i] = rnd_float();
+    }
+
 
     unsigned int VBO;
     glGenBuffers(1, &VBO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * n, vertices, GL_STATIC_DRAW);
 
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
     glEnableVertexAttribArray(0);
 
-    unsigned int IBO;
-    glGenBuffers(1, &IBO);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
 
 
     /* Loop until the user closes the window */
+    float prevt = glfwGetTime();
+    float frames = 0.0f;
     while (!glfwWindowShouldClose(window)) {
         /* Render here */
         glClear(GL_COLOR_BUFFER_BIT);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nullptr);
+
+        glDrawArrays(GL_TRIANGLES, 0, n / 2);        
 
         /* Swap front and back buffers */
         glfwSwapBuffers(window);
 
         /* Poll for and process events */
         glfwPollEvents();
+        
+        ++frames;
+        float curt = glfwGetTime();
+        if (curt - prevt >= 1.0) {
+            std::cout << "FPS: " << frames / (curt - prevt) << std::endl;
+            frames = 0.0;
+            prevt = curt;
+        }
     }
 
 
