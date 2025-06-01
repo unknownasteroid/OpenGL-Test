@@ -6,6 +6,46 @@ static void framebuffer_size_callback(GLFWwindow* window, unsigned int width, un
     glViewport(0, 0, width, height);
 }
 
+static unsigned int compileShader(unsigned int type, const std::string& source) {
+    unsigned int shaderId = glCreateShader(type);
+    const char* src = source.c_str();
+
+    glShaderSource(shaderId, 1, &src, nullptr);
+    glCompileShader(shaderId);
+
+    int result;
+    glGetShaderiv(shaderId, GL_COMPILE_STATUS, &result);
+    if (result == GL_FALSE) {
+        int len;
+        glGetShaderiv(shaderId, GL_INFO_LOG_LENGTH, &len);
+
+        char log[len];
+        glGetShaderInfoLog(shaderId, len, &len, log);
+
+        std::cout << "Failed to compile " << (type == GL_VERTEX_SHADER ? "vertex" : "fragment") << " shader:\n" << log << std::endl;
+        glDeleteShader(shaderId);
+        return 0;
+    }
+
+    return shaderId;
+}
+
+static int createShader(const std::string& vertexShaderSource, const std::string& fragmentShaderSource) {
+    unsigned int programId = glCreateProgram();
+    unsigned int vertexShader   = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
+    unsigned int fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
+    glAttachShader(programId, vertexShader);
+    glAttachShader(programId, fragmentShader);
+
+    glLinkProgram(programId);
+    glValidateProgram(programId);
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);
+
+    return programId;
+}
+
 int main() {
     /* Initialize the library */
     if (!glfwInit()) {
@@ -35,60 +75,20 @@ int main() {
 
 
 
-    const char* vertexShaderSource = "#version 450 core\n"
+    std::string vertexShaderSource = "#version 330 core\n"
                                      "layout (location = 0) in vec3 aPos;\n"
                                      "void main() {\n"
                                      "    gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
                                      "}\n";
-    
-    unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
 
-    glShaderSource(vertexShader, 1, &vertexShaderSource, NULL);
-    glCompileShader(vertexShader);
-
-    int success;
-    char infolog[512];
-
-    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(vertexShader, 512, NULL, infolog);
-        std::cout << "Vertex shader error!\n" << infolog << std::endl;
-    }
-
-
-
-    const char* fragmentShaderSource = "#version 450 core\n"
+    std::string fragmentShaderSource = "#version 330 core\n"
                                        "out vec4 FragColor;\n"
                                        "void main() {\n"
                                        "    FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);\n"
                                        "}\n";
 
-    unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    glCompileShader(fragmentShader);
-
-    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    if (!success) {
-        glGetShaderInfoLog(fragmentShader, 512, NULL, infolog);
-        std::cout << "Fragment shader error!\n" << infolog << std::endl;
-    }
-
-
-
-    unsigned int shaderProgram = glCreateProgram();
-    glAttachShader(shaderProgram, vertexShader);
-    glAttachShader(shaderProgram, fragmentShader);
-    glLinkProgram(shaderProgram);
-
-    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
-    if (!success) {
-        glGetProgramInfoLog(shaderProgram, 512, NULL, infolog);
-        std::cout << "Program error!\n" << infolog << std::endl;
-    }
-
+    unsigned int shaderProgram = createShader(vertexShaderSource, fragmentShaderSource);
     glUseProgram(shaderProgram);
-    glDeleteShader(vertexShader);
-    glDeleteShader(fragmentShader);
 
 
 
@@ -120,6 +120,11 @@ int main() {
         /* Poll for and process events */
         glfwPollEvents();
     }
+
+
+
+    glDeleteBuffers(1, &VBO);
+    glDeleteProgram(shaderProgram);
 
     glfwTerminate();
     return 0;
