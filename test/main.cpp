@@ -17,8 +17,8 @@
 
 std::mt19937 rnd(time(NULL));
 
-float rnd_float() {
-    return ((float)rnd() / (float)RAND_MAX - 1.0f) * 1.0f;
+float rnd_float(float l, float r) {
+    return l + ((float)rnd() / (float)UINT32_MAX) * (r - l);
 }
 
 static void clearErrors() {
@@ -79,10 +79,24 @@ static int createShader(const std::string& vertexShaderSource, const std::string
 
     glLinkProgram(programId);
     glValidateProgram(programId);
+
+    int result;
+    glGetProgramiv(programId, GL_VALIDATE_STATUS, &result);
     
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
+    if (result == GL_FALSE) {
+        int len;
+        glGetProgramiv(programId, GL_INFO_LOG_LENGTH, &len);
+
+        char log[len];
+        glGetProgramInfoLog(programId, len, &len, log);
+
+        std::cout << "Failed to create shader program:\n" << log << std::endl;
+        glDeleteProgram(programId);
+        return 0;
+    }
     return programId;
 }
 
@@ -125,20 +139,39 @@ int main() {
 
 
     int n; std::cin >> n;
-    n *= 6;
-    float* vertices = (float*)malloc(sizeof(float) * n);
-    for (int i = 0; i < n; ++i) {
-        vertices[i] = rnd_float();
+
+    int nV = n * 6;
+    float* vertices = (float*)malloc(sizeof(float) * nV);
+    for (int i = 0; i < nV; ++i) {
+        vertices[i] = rnd_float(-1.0f, 1.0f);
+        // std::cout << vertices[i] << std::endl;
+    }
+
+    int nCol = n * 4;
+    float* colors = (float*)malloc(sizeof(float) * nCol);
+    for (int i = 0; i < nCol; i += 4) {
+        colors[i] = rnd_float(0.0f, 1.0f);
+        colors[i + 1] = rnd_float(0.0f, 1.0f);
+        colors[i + 2] = rnd_float(0.0f, 1.0f);
+        colors[i + 3] = 1.0f;
     }
 
 
-    unsigned int VBO;
-    glGenBuffers(1, &VBO);
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * n, vertices, GL_STATIC_DRAW);
+    unsigned int VBO[2];
+    glGenBuffers(2, VBO);
 
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[0]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * nV, vertices, GL_STATIC_DRAW);
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, 0);
     glEnableVertexAttribArray(0);
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO[1]);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * nCol, colors, GL_STATIC_DRAW);
+    glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(float) * 4, 0);
+    glEnableVertexAttribArray(1);
+
+    free(vertices);
+    free(colors);
 
 
 
@@ -168,7 +201,7 @@ int main() {
 
 
 
-    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(2, VBO);
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
